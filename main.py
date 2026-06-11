@@ -37,6 +37,7 @@ class StarExpansionApp(QMainWindow):
         self.speed_multiplier = 1.0
 
         self.view_radius = 20.0
+        self.vector_scale = 4.0
 
         rng = np.random.default_rng(12)
         self.initial_positions = rng.uniform(-10, 10, size=(self.star_count, 2))
@@ -70,12 +71,22 @@ class StarExpansionApp(QMainWindow):
         self.view_radius_slider.setValue(int(self.view_radius))
         self.view_radius_slider.valueChanged.connect(self.update_view_radius)
 
+        self.vector_scale_slider = QSlider(Qt.Horizontal)
+        self.vector_scale_slider.setRange(1, 40)
+        self.vector_scale_slider.setValue(int(self.vector_scale))
+        self.vector_scale_slider.valueChanged.connect(self.update_vector_scale)
+
+        self.show_vectors_checkbox = QCheckBox("Show velocity vectors")
+        self.show_vectors_checkbox.setChecked(True)
+        self.show_vectors_checkbox.stateChanged.connect(self.redraw)
+
         self.auto_scale_checkbox = QCheckBox("Auto scale axes")
         self.auto_scale_checkbox.setChecked(False)
         self.auto_scale_checkbox.stateChanged.connect(self.redraw)
 
         self.time_label = QLabel("t = 0.00")
         self.radius_label = QLabel(f"View radius = {self.view_radius:.0f}")
+        self.vector_label = QLabel(f"Vector scale = {self.vector_scale:.0f}")
         self.mode_label = QLabel("Model: v = k · r")
 
         self.start_button = QPushButton("Start")
@@ -114,8 +125,8 @@ class StarExpansionApp(QMainWindow):
         title.setObjectName("TitleLabel")
 
         subtitle = QLabel(
-            "Fixed axes make the expansion visible. Auto scale is available, "
-            "but it hides the feeling of motion because the camera expands with the stars."
+            "The simulation shows star motion in two reference frames: "
+            "from the Sun and from a selected star N."
         )
         subtitle.setWordWrap(True)
         subtitle.setObjectName("SubtitleLabel")
@@ -143,6 +154,11 @@ class StarExpansionApp(QMainWindow):
 
         control_layout.addWidget(self.auto_scale_checkbox)
 
+        control_layout.addWidget(QLabel("Velocity vector scale"))
+        control_layout.addWidget(self.vector_scale_slider)
+        control_layout.addWidget(self.vector_label)
+        control_layout.addWidget(self.show_vectors_checkbox)
+
         control_layout.addWidget(self.time_label)
         control_layout.addWidget(self.mode_label)
 
@@ -152,14 +168,14 @@ class StarExpansionApp(QMainWindow):
         control_layout.addWidget(self.reset_button)
 
         explanation = QLabel(
-            "Axes mode:\n"
-            "manual: x,y ∈ [-R, R]\n"
-            "auto: axes follow the stars\n\n"
+            "Velocity vectors:\n"
+            "vᵢ = k · rᵢ\n\n"
             "Sun frame:\n"
-            "rᵢ(t) = rᵢ(0) · e^(kt)\n\n"
+            "rᵢ is measured from the Sun\n\n"
             "Star N frame:\n"
             "r'ᵢ = rᵢ - r_N\n"
-            "v'ᵢ = vᵢ - v_N"
+            "v'ᵢ = vᵢ - v_N\n\n"
+            "The arrows show velocity in the currently selected reference frame."
         )
         explanation.setWordWrap(True)
         explanation.setObjectName("ExplanationLabel")
@@ -332,17 +348,24 @@ class StarExpansionApp(QMainWindow):
             label="Sun"
         )
 
-        arrow_scale = max(1.0, 0.35 * max_abs)
+        if self.show_vectors_checkbox.isChecked():
+            visible_vector_lengths = velocities * self.vector_scale
+
         self.ax.quiver(
             positions[:, 0],
             positions[:, 1],
-            velocities[:, 0],
-            velocities[:, 1],
+            visible_vector_lengths[:, 0],
+            visible_vector_lengths[:, 1],
             angles="xy",
             scale_units="xy",
-            scale=arrow_scale,
-            width=0.004,
-            alpha=0.75
+            scale=1,
+            width=0.006,
+            headwidth=4,
+            headlength=6,
+            headaxislength=5,
+            alpha=0.95,
+            color="#FBBF24",
+            label="Velocity vectors"
         )
 
         legend = self.ax.legend(loc="upper right", facecolor="#1F2937", edgecolor="#374151")
@@ -351,6 +374,7 @@ class StarExpansionApp(QMainWindow):
 
         self.time_label.setText(f"t = {self.time:.2f}")
         self.radius_label.setText(f"View radius = {self.view_radius:.0f}")
+        self.vector_label.setText(f"Vector scale = {self.vector_scale:.0f}")
         self.canvas.draw()
 
     def update_k(self, value):
@@ -362,6 +386,10 @@ class StarExpansionApp(QMainWindow):
 
     def update_view_radius(self, value):
         self.view_radius = float(value)
+        self.redraw()
+
+    def update_vector_scale(self, value):
+        self.vector_scale = float(value)
         self.redraw()
 
     def zoom_in(self):
