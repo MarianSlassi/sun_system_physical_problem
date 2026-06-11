@@ -4,6 +4,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
@@ -25,14 +26,17 @@ class StarExpansionApp(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Star Expansion Model")
-        self.resize(1200, 760)
+        self.resize(1250, 780)
 
         self.star_count = 35
         self.n_index = 0
+
         self.k = 0.12
         self.time = 0.0
         self.dt = 0.03
         self.speed_multiplier = 1.0
+
+        self.view_radius = 20.0
 
         rng = np.random.default_rng(12)
         self.initial_positions = rng.uniform(-10, 10, size=(self.star_count, 2))
@@ -61,7 +65,17 @@ class StarExpansionApp(QMainWindow):
         self.speed_slider.setValue(25)
         self.speed_slider.valueChanged.connect(self.update_speed)
 
+        self.view_radius_slider = QSlider(Qt.Horizontal)
+        self.view_radius_slider.setRange(5, 200)
+        self.view_radius_slider.setValue(int(self.view_radius))
+        self.view_radius_slider.valueChanged.connect(self.update_view_radius)
+
+        self.auto_scale_checkbox = QCheckBox("Auto scale axes")
+        self.auto_scale_checkbox.setChecked(False)
+        self.auto_scale_checkbox.stateChanged.connect(self.redraw)
+
         self.time_label = QLabel("t = 0.00")
+        self.radius_label = QLabel(f"View radius = {self.view_radius:.0f}")
         self.mode_label = QLabel("Model: v = k · r")
 
         self.start_button = QPushButton("Start")
@@ -72,6 +86,12 @@ class StarExpansionApp(QMainWindow):
 
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.reset)
+
+        self.zoom_in_button = QPushButton("Zoom in")
+        self.zoom_in_button.clicked.connect(self.zoom_in)
+
+        self.zoom_out_button = QPushButton("Zoom out")
+        self.zoom_out_button.clicked.connect(self.zoom_out)
 
         self.build_layout()
         self.apply_style()
@@ -86,16 +106,16 @@ class StarExpansionApp(QMainWindow):
         plot_layout.addWidget(self.canvas)
 
         control_panel = QFrame()
-        control_panel.setFixedWidth(330)
+        control_panel.setFixedWidth(350)
         control_layout = QVBoxLayout(control_panel)
-        control_layout.setSpacing(16)
+        control_layout.setSpacing(14)
 
         title = QLabel("Expansion Simulator")
         title.setObjectName("TitleLabel")
 
         subtitle = QLabel(
-            "This app shows how the same expansion law looks from the Sun "
-            "and from a selected moving star N."
+            "Fixed axes make the expansion visible. Auto scale is available, "
+            "but it hides the feeling of motion because the camera expands with the stars."
         )
         subtitle.setWordWrap(True)
         subtitle.setObjectName("SubtitleLabel")
@@ -112,27 +132,39 @@ class StarExpansionApp(QMainWindow):
         control_layout.addWidget(QLabel("Animation speed"))
         control_layout.addWidget(self.speed_slider)
 
+        control_layout.addWidget(QLabel("View radius"))
+        control_layout.addWidget(self.view_radius_slider)
+        control_layout.addWidget(self.radius_label)
+
+        zoom_layout = QHBoxLayout()
+        zoom_layout.addWidget(self.zoom_in_button)
+        zoom_layout.addWidget(self.zoom_out_button)
+        control_layout.addLayout(zoom_layout)
+
+        control_layout.addWidget(self.auto_scale_checkbox)
+
         control_layout.addWidget(self.time_label)
         control_layout.addWidget(self.mode_label)
 
-        control_layout.addSpacing(10)
+        control_layout.addSpacing(8)
         control_layout.addWidget(self.start_button)
         control_layout.addWidget(self.step_button)
         control_layout.addWidget(self.reset_button)
 
         explanation = QLabel(
+            "Axes mode:\n"
+            "manual: x,y ∈ [-R, R]\n"
+            "auto: axes follow the stars\n\n"
             "Sun frame:\n"
             "rᵢ(t) = rᵢ(0) · e^(kt)\n\n"
             "Star N frame:\n"
             "r'ᵢ = rᵢ - r_N\n"
-            "v'ᵢ = vᵢ - v_N\n\n"
-            "The animation does not move points by a numerical integrator. "
-            "It recalculates their exact positions for the current model time."
+            "v'ᵢ = vᵢ - v_N"
         )
         explanation.setWordWrap(True)
         explanation.setObjectName("ExplanationLabel")
 
-        control_layout.addSpacing(12)
+        control_layout.addSpacing(10)
         control_layout.addWidget(explanation)
         control_layout.addStretch()
 
@@ -166,7 +198,6 @@ class StarExpansionApp(QMainWindow):
             QLabel#SubtitleLabel {
                 color: #A5B4FC;
                 font-size: 14px;
-                line-height: 1.4;
             }
 
             QLabel#ExplanationLabel {
@@ -176,6 +207,11 @@ class StarExpansionApp(QMainWindow):
                 padding: 14px;
                 font-family: Menlo;
                 font-size: 12px;
+            }
+
+            QCheckBox {
+                color: #E5E7EB;
+                font-size: 14px;
             }
 
             QComboBox, QDoubleSpinBox {
@@ -260,7 +296,15 @@ class StarExpansionApp(QMainWindow):
         self.ax.grid(True, alpha=0.25)
         self.ax.set_aspect("equal", adjustable="box")
 
-        max_abs = max(12.0, float(np.max(np.abs(positions))) + 3.0, float(np.max(np.abs(sun_position))) + 3.0)
+        if self.auto_scale_checkbox.isChecked():
+            max_abs = max(
+                12.0,
+                float(np.max(np.abs(positions))) + 3.0,
+                float(np.max(np.abs(sun_position))) + 3.0,
+            )
+        else:
+            max_abs = self.view_radius
+
         self.ax.set_xlim(-max_abs, max_abs)
         self.ax.set_ylim(-max_abs, max_abs)
 
@@ -288,7 +332,7 @@ class StarExpansionApp(QMainWindow):
             label="Sun"
         )
 
-        arrow_scale = max(1.0, 0.4 * max_abs)
+        arrow_scale = max(1.0, 0.35 * max_abs)
         self.ax.quiver(
             positions[:, 0],
             positions[:, 1],
@@ -306,6 +350,7 @@ class StarExpansionApp(QMainWindow):
             text.set_color("#F9FAFB")
 
         self.time_label.setText(f"t = {self.time:.2f}")
+        self.radius_label.setText(f"View radius = {self.view_radius:.0f}")
         self.canvas.draw()
 
     def update_k(self, value):
@@ -314,6 +359,20 @@ class StarExpansionApp(QMainWindow):
 
     def update_speed(self, value):
         self.speed_multiplier = value / 25.0
+
+    def update_view_radius(self, value):
+        self.view_radius = float(value)
+        self.redraw()
+
+    def zoom_in(self):
+        self.view_radius = max(5.0, self.view_radius * 0.8)
+        self.view_radius_slider.setValue(int(self.view_radius))
+        self.redraw()
+
+    def zoom_out(self):
+        self.view_radius = min(200.0, self.view_radius * 1.25)
+        self.view_radius_slider.setValue(int(self.view_radius))
+        self.redraw()
 
     def animate(self):
         self.time += self.dt * self.speed_multiplier

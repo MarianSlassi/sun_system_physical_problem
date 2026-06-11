@@ -1,0 +1,9 @@
+## Problem Statement
+
+This project models the motion of stars in an expanding stellar system. At the initial moment, the Sun is chosen as the origin of the coordinate system. Each star has a position vector relative to the Sun, and its velocity is directed away from the Sun. The magnitude of the velocity is proportional to the distance from the Sun. In vector form, this law is written as ( \vec v_i = k \vec r_i ), where ( \vec v_i ) is the velocity vector of the (i)-th star, ( \vec r_i ) is the position vector of the (i)-th star relative to the Sun, and ( k ) is the expansion coefficient.
+
+The task is to simulate this motion and show how the same system looks from two different reference frames. In the first reference frame, the observer is located at the Sun. In this case, all stars move away from the Sun, and more distant stars move faster. In the second reference frame, the observer is located on one selected star, denoted as star (N). In this case, the coordinates and velocities of all objects must be recalculated relative to star (N).
+
+The purpose of the simulation is to demonstrate that the expansion law is preserved after changing the reference frame. If every star moves according to the law ( \vec v_i = k \vec r_i ) relative to the Sun, then from the point of view of star (N), the other stars also move away according to the same proportional law. This happens because the relative velocity between two stars is proportional to the relative distance between them.
+
+The application must allow the user to switch between the Sun reference frame and the star (N) reference frame, start and pause continuous motion, perform a single time step, reset the simulation, change the expansion coefficient, control the animation speed, and manually adjust the visible coordinate range. The visualization should make it clear how the observed motion changes when the observer moves from the Sun to one of the stars.
