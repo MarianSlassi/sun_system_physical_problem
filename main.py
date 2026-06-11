@@ -1,0 +1,345 @@
+import sys
+import numpy as np
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDoubleSpinBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
+)
+
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+class StarExpansionApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Star Expansion Model")
+        self.resize(1200, 760)
+
+        self.star_count = 35
+        self.n_index = 0
+        self.k = 0.12
+        self.time = 0.0
+        self.dt = 0.03
+        self.speed_multiplier = 1.0
+
+        rng = np.random.default_rng(12)
+        self.initial_positions = rng.uniform(-10, 10, size=(self.star_count, 2))
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(30)
+        self.timer.timeout.connect(self.animate)
+
+        self.figure = Figure(figsize=(7, 7))
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+
+        self.reference_box = QComboBox()
+        self.reference_box.addItem("View from the Sun", "sun")
+        self.reference_box.addItem("View from star N", "star_n")
+        self.reference_box.currentIndexChanged.connect(self.redraw)
+
+        self.k_spin = QDoubleSpinBox()
+        self.k_spin.setRange(0.01, 0.50)
+        self.k_spin.setSingleStep(0.01)
+        self.k_spin.setValue(self.k)
+        self.k_spin.valueChanged.connect(self.update_k)
+
+        self.speed_slider = QSlider(Qt.Horizontal)
+        self.speed_slider.setRange(1, 100)
+        self.speed_slider.setValue(25)
+        self.speed_slider.valueChanged.connect(self.update_speed)
+
+        self.time_label = QLabel("t = 0.00")
+        self.mode_label = QLabel("Model: v = k · r")
+
+        self.start_button = QPushButton("Start")
+        self.start_button.clicked.connect(self.toggle_animation)
+
+        self.step_button = QPushButton("Step forward")
+        self.step_button.clicked.connect(self.step_forward)
+
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.clicked.connect(self.reset)
+
+        self.build_layout()
+        self.apply_style()
+        self.redraw()
+
+    def build_layout(self):
+        central = QWidget()
+        root_layout = QHBoxLayout(central)
+
+        plot_panel = QFrame()
+        plot_layout = QVBoxLayout(plot_panel)
+        plot_layout.addWidget(self.canvas)
+
+        control_panel = QFrame()
+        control_panel.setFixedWidth(330)
+        control_layout = QVBoxLayout(control_panel)
+        control_layout.setSpacing(16)
+
+        title = QLabel("Expansion Simulator")
+        title.setObjectName("TitleLabel")
+
+        subtitle = QLabel(
+            "This app shows how the same expansion law looks from the Sun "
+            "and from a selected moving star N."
+        )
+        subtitle.setWordWrap(True)
+        subtitle.setObjectName("SubtitleLabel")
+
+        control_layout.addWidget(title)
+        control_layout.addWidget(subtitle)
+
+        control_layout.addWidget(QLabel("Reference frame"))
+        control_layout.addWidget(self.reference_box)
+
+        control_layout.addWidget(QLabel("Expansion coefficient k"))
+        control_layout.addWidget(self.k_spin)
+
+        control_layout.addWidget(QLabel("Animation speed"))
+        control_layout.addWidget(self.speed_slider)
+
+        control_layout.addWidget(self.time_label)
+        control_layout.addWidget(self.mode_label)
+
+        control_layout.addSpacing(10)
+        control_layout.addWidget(self.start_button)
+        control_layout.addWidget(self.step_button)
+        control_layout.addWidget(self.reset_button)
+
+        explanation = QLabel(
+            "Sun frame:\n"
+            "rᵢ(t) = rᵢ(0) · e^(kt)\n\n"
+            "Star N frame:\n"
+            "r'ᵢ = rᵢ - r_N\n"
+            "v'ᵢ = vᵢ - v_N\n\n"
+            "The animation does not move points by a numerical integrator. "
+            "It recalculates their exact positions for the current model time."
+        )
+        explanation.setWordWrap(True)
+        explanation.setObjectName("ExplanationLabel")
+
+        control_layout.addSpacing(12)
+        control_layout.addWidget(explanation)
+        control_layout.addStretch()
+
+        root_layout.addWidget(plot_panel, stretch=1)
+        root_layout.addWidget(control_panel)
+
+        self.setCentralWidget(central)
+
+    def apply_style(self):
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #111827;
+            }
+
+            QFrame {
+                background-color: #111827;
+                border: none;
+            }
+
+            QLabel {
+                color: #E5E7EB;
+                font-size: 14px;
+            }
+
+            QLabel#TitleLabel {
+                color: #FFFFFF;
+                font-size: 26px;
+                font-weight: 700;
+            }
+
+            QLabel#SubtitleLabel {
+                color: #A5B4FC;
+                font-size: 14px;
+                line-height: 1.4;
+            }
+
+            QLabel#ExplanationLabel {
+                color: #CBD5E1;
+                background-color: #1F2937;
+                border-radius: 14px;
+                padding: 14px;
+                font-family: Menlo;
+                font-size: 12px;
+            }
+
+            QComboBox, QDoubleSpinBox {
+                background-color: #1F2937;
+                color: #F9FAFB;
+                border: 1px solid #374151;
+                border-radius: 10px;
+                padding: 8px;
+                font-size: 14px;
+            }
+
+            QPushButton {
+                background-color: #4F46E5;
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 11px;
+                font-size: 15px;
+                font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background-color: #6366F1;
+            }
+
+            QPushButton:pressed {
+                background-color: #4338CA;
+            }
+
+            QSlider::groove:horizontal {
+                height: 8px;
+                background: #374151;
+                border-radius: 4px;
+            }
+
+            QSlider::handle:horizontal {
+                width: 18px;
+                height: 18px;
+                margin: -5px 0;
+                border-radius: 9px;
+                background: #A5B4FC;
+            }
+        """)
+
+    def get_positions_and_velocities(self):
+        positions = self.initial_positions * np.exp(self.k * self.time)
+        velocities = self.k * positions
+        return positions, velocities
+
+    def get_visible_data(self):
+        positions, velocities = self.get_positions_and_velocities()
+        frame = self.reference_box.currentData()
+
+        if frame == "star_n":
+            n_position = positions[self.n_index].copy()
+            n_velocity = velocities[self.n_index].copy()
+
+            visible_positions = positions - n_position
+            visible_velocities = velocities - n_velocity
+            sun_position = -n_position
+            title = "View from star N"
+        else:
+            visible_positions = positions
+            visible_velocities = velocities
+            sun_position = np.array([0.0, 0.0])
+            title = "View from the Sun"
+
+        return visible_positions, visible_velocities, sun_position, title
+
+    def redraw(self):
+        positions, velocities, sun_position, title = self.get_visible_data()
+
+        self.ax.clear()
+        self.figure.patch.set_facecolor("#111827")
+        self.ax.set_facecolor("#0B1120")
+
+        self.ax.set_title(title, color="#F9FAFB", fontsize=16, pad=14)
+        self.ax.set_xlabel("x", color="#E5E7EB")
+        self.ax.set_ylabel("y", color="#E5E7EB")
+
+        self.ax.tick_params(colors="#CBD5E1")
+        self.ax.grid(True, alpha=0.25)
+        self.ax.set_aspect("equal", adjustable="box")
+
+        max_abs = max(12.0, float(np.max(np.abs(positions))) + 3.0, float(np.max(np.abs(sun_position))) + 3.0)
+        self.ax.set_xlim(-max_abs, max_abs)
+        self.ax.set_ylim(-max_abs, max_abs)
+
+        self.ax.scatter(
+            positions[:, 0],
+            positions[:, 1],
+            s=48,
+            label="Stars",
+            alpha=0.9
+        )
+
+        self.ax.scatter(
+            positions[self.n_index, 0],
+            positions[self.n_index, 1],
+            s=190,
+            marker="*",
+            label="Star N"
+        )
+
+        self.ax.scatter(
+            sun_position[0],
+            sun_position[1],
+            s=160,
+            marker="o",
+            label="Sun"
+        )
+
+        arrow_scale = max(1.0, 0.4 * max_abs)
+        self.ax.quiver(
+            positions[:, 0],
+            positions[:, 1],
+            velocities[:, 0],
+            velocities[:, 1],
+            angles="xy",
+            scale_units="xy",
+            scale=arrow_scale,
+            width=0.004,
+            alpha=0.75
+        )
+
+        legend = self.ax.legend(loc="upper right", facecolor="#1F2937", edgecolor="#374151")
+        for text in legend.get_texts():
+            text.set_color("#F9FAFB")
+
+        self.time_label.setText(f"t = {self.time:.2f}")
+        self.canvas.draw()
+
+    def update_k(self, value):
+        self.k = float(value)
+        self.redraw()
+
+    def update_speed(self, value):
+        self.speed_multiplier = value / 25.0
+
+    def animate(self):
+        self.time += self.dt * self.speed_multiplier
+        self.redraw()
+
+    def toggle_animation(self):
+        if self.timer.isActive():
+            self.timer.stop()
+            self.start_button.setText("Start")
+        else:
+            self.timer.start()
+            self.start_button.setText("Pause")
+
+    def step_forward(self):
+        self.time += self.dt * self.speed_multiplier
+        self.redraw()
+
+    def reset(self):
+        self.timer.stop()
+        self.start_button.setText("Start")
+        self.time = 0.0
+        self.redraw()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = StarExpansionApp()
+    window.show()
+    sys.exit(app.exec())
