@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from numpy.char import center
 
 
 class StarExpansionApp(QMainWindow):
@@ -28,7 +29,7 @@ class StarExpansionApp(QMainWindow):
         self.setWindowTitle("Star Expansion Model")
         self.resize(1250, 780)
 
-        self.star_count = 35
+        self.star_count = 335
         self.n_index = 0
 
         self.k = 0.12
@@ -40,7 +41,10 @@ class StarExpansionApp(QMainWindow):
         self.vector_scale = 4.0
 
         rng = np.random.default_rng(12)
-        self.initial_positions = rng.uniform(-10, 10, size=(self.star_count, 2))
+        center = np.array([30, -30])
+
+        sigma = 40
+        self.initial_positions = rng.normal(loc=center, scale=sigma, size=(self.star_count, 2))
 
         self.timer = QTimer(self)
         self.timer.setInterval(30)
