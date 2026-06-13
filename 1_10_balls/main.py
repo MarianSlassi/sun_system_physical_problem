@@ -27,7 +27,7 @@ class SimulationWidget(QWidget):
         self.target_t = 1.70
         self.t = 0.0
         self.dt = 0.01
-        self.t_max = 3.0
+        self.t_max = 40.0
 
         self.scale = 12.0
 
